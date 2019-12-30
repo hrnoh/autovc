@@ -31,6 +31,11 @@ hparams = tf.contrib.training.HParams(
     fmin=125,
     fmax=7600,
     fft_size=1024,
+    win_size=1024,
+
+    preemphasize = False, #whether to apply filter
+    preemphasis = 0.97,
+
     # shift can be specified by either hop_size or frame_shift_ms
     hop_size=256,
     frame_shift_ms=None,
@@ -44,10 +49,20 @@ hparams = tf.contrib.training.HParams(
     # mel-spectrogram is normalized to [0, 1] for each utterance and clipping may
     # happen depends on min_level_db and ref_level_db, causing clipping noise.
     # If False, assertion is added to ensure no clipping happens.o0
+    signal_normalization = True, #Whether to normalize mel spectrograms to some predefined range (following below parameters)
     allow_clipping_in_normalization=True,
+    symmetric_mels = True, #Whether to scale the data to be symmetric around 0. (Also multiplies the output range by 2, faster and cleaner convergence)
+    max_abs_value = 4., #max absolute value of data. If symmetric, data will be [-max, max] else [0, max] (Must not be too big to avoid gradient explosion, not too small for fast convergence)
 
     # Mixture of logistic distributions:
     log_scale_min=float(-32.23619130191664),
+
+    trim_silence = True, #Whether to clip silence in Audio (at beginning and end of audio only, not the middle)
+    trim_fft_size = 1024,
+    trim_hop_size = 256,
+    trim_top_db = 25,
+
+    power = 1.0,
 
     # Model:
     # This should equal to `quantize_channels` if mu-law quantize enabled
