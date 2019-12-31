@@ -87,9 +87,11 @@ def _process_utterance(out_dir, in_dir, speaker, hparams):
                 wav = trim_silence(wav, hparams)  # Trim leading and trailing silence
 
             mel = melspectrogram(wav, hparams)
+            seq_len = wav.shape[0]
+            frame_len = mel.shape[1]
 
             file_name = wav_name
-            np.save(os.path.join(out_dir, file_name), mel.T)
+            np.savez(os.path.join(out_dir, file_name), mel=mel.T, seq_len=seq_len, frame_len=frame_len)
 
     return num_samples
 
