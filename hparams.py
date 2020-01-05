@@ -33,6 +33,14 @@ hparams = tf.contrib.training.HParams(
     fft_size=1024,
     win_size=1024,
 
+    # Audio for speaker encoder
+    sr = 16000,
+    nfft = 1024,
+    window = 0.025, # (s) (25ms)
+    hop = 0.01, # (s) (10ms)
+    nmels=40,
+    sv_frame = 180, # Max number of time steps in input after preprocess
+
     preemphasize = False, #whether to apply filter
     preemphasis = 0.97,
 
@@ -84,7 +92,7 @@ hparams = tf.contrib.training.HParams(
 
     # Speaker encoder parameters
     hidden=768,
-    num_layer=3,
+    num_layer=2,
     proj=256,
 
     # Local conditioning (set negative value to disable))
@@ -99,7 +107,7 @@ hparams = tf.contrib.training.HParams(
 
     # Global conditioning (set negative value to disable)
     # currently limited for speaker embedding
-    # this should only be enabled for multi-speaker dataset
+    # this should only be enabled for multi-speaker datasets
     gin_channels=-1,  # i.e., speaker embedding dim
     n_speakers=-1,  
 

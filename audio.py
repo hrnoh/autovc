@@ -62,7 +62,7 @@ def melspectrogram(wav, hparams):
 def trim_silence(wav, hparams):
     '''Trim leading and trailing silence
 
-    Useful for M-AILABS dataset if we choose to trim the extra 0.5 silence at beginning and end.
+    Useful for M-AILABS datasets if we choose to trim the extra 0.5 silence at beginning and end.
     '''
-    #Thanks @begeekmyfriend and @lautjy for pointing out the params contradiction. These params are separate and tunable per dataset.
+    #Thanks @begeekmyfriend and @lautjy for pointing out the params contradiction. These params are separate and tunable per datasets.
     return librosa.effects.trim(wav, top_db= hparams.trim_top_db, frame_length=hparams.trim_fft_size, hop_length=hparams.trim_hop_size)[0]
