@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from hparams import hparams
 
 
@@ -64,6 +63,7 @@ class Encoder(nn.Module):
     def forward(self, x, c_org):
         x = x.squeeze(1).transpose(2,1)
         c_org = c_org.unsqueeze(-1).expand(-1, -1, x.size(-1))
+
         x = torch.cat((x, c_org), dim=1)
         
         for conv in self.convolutions:
@@ -93,7 +93,7 @@ class SpeakerEncoder(nn.Module):
                 nn.init.constant_(param, 0.0)
             elif 'weight' in name:
                 nn.init.xavier_normal_(param)
-        self.projection = nn.Linear(hparams.hidden, hparams.proj)
+        self.projection = nn.Linear(hparams.hidden, hparams.dim_emb)
 
     def forward(self, x):
         x, _ = self.LSTM_stack(x.float())  # (batch, frames, n_mels)
@@ -102,6 +102,17 @@ class SpeakerEncoder(nn.Module):
         x = self.projection(x.float())
         x = x / torch.norm(x, dim=1).unsqueeze(1)
         return x
+
+class SpeakerEncoderOnehot(nn.Module):
+    """
+        Speaker encoder (ont-hot)
+    """
+    def __init__(self):
+        super(SpeakerEncoderOnehot, self).__init__()
+        self.embedding = nn.Embedding(hparams.speaker_num, hparams.dim_emb)
+
+    def forward(self, x):
+        return self.embedding(x)
         
 class Decoder(nn.Module):
     """Decoder module:
@@ -195,13 +206,12 @@ class Generator(nn.Module):
     """Generator network."""
     def __init__(self, dim_neck, dim_emb, dim_pre, freq):
         super(Generator, self).__init__()
-        
+
         self.encoder = Encoder(dim_neck, dim_emb, freq)
         self.decoder = Decoder(dim_neck, dim_emb, dim_pre)
         self.postnet = Postnet()
 
     def forward(self, x, c_org, c_trg):
-                
         codes = self.encoder(x, c_org)
         if c_trg is None:
             return torch.cat(codes, dim=-1)

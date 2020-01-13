@@ -6,6 +6,78 @@ import numpy as np
 
 # Default hyperparameters:
 hparams = tf.contrib.training.HParams(
+    exp_name="autovc_onehot_emb", # ["autovc_onehot", "autovc_onehot_emb", "autovc"]
+    speaker_num=109,
+
+    ################################################################################
+    # Audio:
+    # STFT
+    sample_rate=16000,
+    fft_size=1024,
+    win_size=1024,
+    # shift can be specified by either hop_size or frame_shift_ms
+    hop_size=256,
+    frame_shift_ms=None,
+    power=1.0,
+    # this is only valid for mulaw is True
+    silence_threshold=2,
+
+    # Mel
+    num_mels=80,
+    fmin=125,
+    fmax=7600,
+
+    # Preemphasis
+    preemphasize = False,
+    preemphasis = 0.97,
+
+    # Rescaling
+    # whether to rescale waveform or not.
+    # Let x is an input waveform, rescaled waveform y is given by:
+    # y = x / np.abs(x).max() * rescaling_max
+    rescaling=True,
+    rescaling_max=0.999,
+
+    # Trimming
+    trim_silence = True, #Whether to clip silence in Audio (at beginning and end of audio only, not the middle)
+    trim_fft_size = 1024,
+    trim_hop_size = 256,
+    trim_top_db = 25,
+
+    # Signal normalization
+    # mel-spectrogram is normalized to [0, 1] for each utterance and clipping may
+    # happen depends on min_level_db and ref_level_db, causing clipping noise.
+    # If False, assertion is added to ensure no clipping happens.o0
+    min_level_db=-100,
+    ref_level_db=16,
+    signal_normalization = True, #Whether to normalize mel spectrograms to some predefined range (following below parameters)
+    allow_clipping_in_normalization=True,
+    symmetric_mels = True, #Whether to scale the data to be symmetric around 0. (Also multiplies the output range by 2, faster and cleaner convergence)
+    max_abs_value = 4., #max absolute value of data. If symmetric, data will be [-max, max] else [0, max] (Must not be too big to avoid gradient explosion, not too small for fast convergence)
+
+    ################################################################################
+
+    # Audio for speaker encoder
+    win_size_se = 400, # (s) (25ms)
+    hop_size_se = 160, # (s) (10ms)
+    nmels=40,
+    sv_frame = 180, # Max number of time steps in input after preprocess
+
+    ################################################################################
+    # Model
+    seq_len = 126,
+    dim_emb = 256,
+    dim_neck = 32,
+    dim_pre = 512,
+    freq = 32,
+
+    # Speaker encoder parameters
+    hidden=768,
+    num_layer=2,
+    ################################################################################
+    # WaveNet Model:
+    # This should equal to `quantize_channels` if mu-law quantize enabled
+    # otherwise num_mixture * 3 (pi, mean, log_scale)
     name="wavenet_vocoder",
 
     # Convenient model builder
@@ -23,58 +95,6 @@ hparams = tf.contrib.training.HParams(
     input_type="raw",
     quantize_channels=65536,  # 65536 or 256
 
-    # Audio:
-    sample_rate=16000,
-    # this is only valid for mulaw is True
-    silence_threshold=2,
-    num_mels=80,
-    fmin=125,
-    fmax=7600,
-    fft_size=1024,
-    win_size=1024,
-
-    # Audio for speaker encoder
-    sr = 16000,
-    nfft = 1024,
-    window = 0.025, # (s) (25ms)
-    hop = 0.01, # (s) (10ms)
-    nmels=40,
-    sv_frame = 180, # Max number of time steps in input after preprocess
-
-    preemphasize = False, #whether to apply filter
-    preemphasis = 0.97,
-
-    # shift can be specified by either hop_size or frame_shift_ms
-    hop_size=256,
-    frame_shift_ms=None,
-    min_level_db=-100,
-    ref_level_db=20,
-    # whether to rescale waveform or not.
-    # Let x is an input waveform, rescaled waveform y is given by:
-    # y = x / np.abs(x).max() * rescaling_max
-    rescaling=True,
-    rescaling_max=0.999,
-    # mel-spectrogram is normalized to [0, 1] for each utterance and clipping may
-    # happen depends on min_level_db and ref_level_db, causing clipping noise.
-    # If False, assertion is added to ensure no clipping happens.o0
-    signal_normalization = True, #Whether to normalize mel spectrograms to some predefined range (following below parameters)
-    allow_clipping_in_normalization=True,
-    symmetric_mels = True, #Whether to scale the data to be symmetric around 0. (Also multiplies the output range by 2, faster and cleaner convergence)
-    max_abs_value = 4., #max absolute value of data. If symmetric, data will be [-max, max] else [0, max] (Must not be too big to avoid gradient explosion, not too small for fast convergence)
-
-    # Mixture of logistic distributions:
-    log_scale_min=float(-32.23619130191664),
-
-    trim_silence = True, #Whether to clip silence in Audio (at beginning and end of audio only, not the middle)
-    trim_fft_size = 1024,
-    trim_hop_size = 256,
-    trim_top_db = 25,
-
-    power = 1.0,
-
-    # Model:
-    # This should equal to `quantize_channels` if mu-law quantize enabled
-    # otherwise num_mixture * 3 (pi, mean, log_scale)
     out_channels=10 * 3,
     layers=24,
     stacks=4,
@@ -90,11 +110,6 @@ hparams = tf.contrib.training.HParams(
     # Ref: https://github.com/r9y9/wavenet_vocoder/pull/73
     legacy=True,
 
-    # Speaker encoder parameters
-    hidden=768,
-    num_layer=2,
-    proj=256,
-
     # Local conditioning (set negative value to disable))
     cin_channels=80,
     # If True, use transposed convolutions to upsample conditional features,
@@ -109,22 +124,25 @@ hparams = tf.contrib.training.HParams(
     # currently limited for speaker embedding
     # this should only be enabled for multi-speaker datasets
     gin_channels=-1,  # i.e., speaker embedding dim
-    n_speakers=-1,  
+    n_speakers=-1,
+
+    # Mixture of logistic distributions:
+    log_scale_min=float(-32.23619130191664),
+    ################################################################################
 
     # Data loader
     pin_memory=True,
     num_workers=2,
 
-    # train/test
-    # test size can be specified as portion or num samples
-    test_size=0.0441,  # 50 for CMU ARCTIC single speaker
-    test_num_samples=None,
-    random_state=1234,
+    ################################################################################
 
     # Loss
+    recon_mu = 1,
+    content_lambda = 1,
 
+    ################################################################################
     # Training:
-    batch_size=2,
+    batch_size=32,
     adam_beta1=0.9,
     adam_beta2=0.999,
     adam_eps=1e-8,
@@ -145,15 +163,29 @@ hparams = tf.contrib.training.HParams(
     # averaged = decay * averaged + (1 - decay) * x
     ema_decay=0.9999,
 
+    ################################################################################
     # Save
     # per-step intervals
-    checkpoint_interval=10000,
+    checkpoint_interval=5000,
     train_eval_interval=10000,
     # per-epoch interval
     test_eval_epoch_interval=5,
     save_optimizer_state=True,
 
-    # Eval:
+    ################################################################################
+    # Log
+    log_step=20,
+    use_tensorboard=True,
+
+    # Etc
+    # train/test
+    # test size can be specified as portion or num samples
+    test_size=0.0441,  # 50 for CMU ARCTIC single speaker
+    test_num_samples=None,
+    random_state=1234,
+
+    ################################################################################
+    griffin_lim_iters = 60,
 )
 
 

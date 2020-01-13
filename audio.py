@@ -1,8 +1,16 @@
 import numpy as np
 from scipy import signal
+from scipy.io import wavfile
 import librosa
 
 _mel_basis = None
+_inv_mel_basis = None
+
+def save_wav(wav, path, sr):
+    wav *= 32767 / max(0.01, np.max(np.abs(wav)))
+    #proposed by @dsmiller   --> libosa type error(bug) 극복
+
+    wavfile.write(path, sr, wav.astype(np.int16))
 
 def get_hop_size(hparams):
     hop_size = hparams.hop_size
@@ -16,8 +24,16 @@ def preemphasis(wav, k, preemphasize=True):
         return signal.lfilter([1, -k], [1], wav)
     return wav
 
+def inv_preemphasis(wav, k, inv_preemphasize=True):
+    if inv_preemphasize:
+        return signal.lfilter([1], [1, -k], wav)
+    return wav
+
 def _stft(y, hparams):
     return librosa.stft(y=y, n_fft=hparams.fft_size, hop_length=get_hop_size(hparams), win_length=hparams.win_size)
+
+def _istft(y, hparams):
+    return librosa.istft(y, hop_length=get_hop_size(hparams), win_length=hparams.win_size)
 
 def _build_mel_basis(hparams):
     assert hparams.fmax <= hparams.sample_rate // 2
@@ -66,3 +82,54 @@ def trim_silence(wav, hparams):
     '''
     #Thanks @begeekmyfriend and @lautjy for pointing out the params contradiction. These params are separate and tunable per datasets.
     return librosa.effects.trim(wav, top_db= hparams.trim_top_db, frame_length=hparams.trim_fft_size, hop_length=hparams.trim_hop_size)[0]
+
+def _griffin_lim(S, hparams):
+    '''librosa implementation of Griffin-Lim
+    Based on https://github.com/librosa/librosa/issues/434
+    '''
+    angles = np.exp(2j * np.pi * np.random.rand(*S.shape))
+    S_complex = np.abs(S).astype(np.complex)
+    y = _istft(S_complex * angles, hparams)
+    for i in range(hparams.griffin_lim_iters):
+        angles = np.exp(1j * np.angle(_stft(y, hparams)))
+        y = _istft(S_complex * angles, hparams)
+    return y
+
+
+def _denormalize(D, hparams):
+    if hparams.allow_clipping_in_normalization:
+        if hparams.symmetric_mels:
+            return (((np.clip(D, -hparams.max_abs_value,
+                              hparams.max_abs_value) + hparams.max_abs_value) * -hparams.min_level_db / (
+                                 2 * hparams.max_abs_value))
+                    + hparams.min_level_db)
+        else:
+            return ((np.clip(D, 0,
+                             hparams.max_abs_value) * -hparams.min_level_db / hparams.max_abs_value) + hparams.min_level_db)
+
+    if hparams.symmetric_mels:
+        return (((D + hparams.max_abs_value) * -hparams.min_level_db / (
+                    2 * hparams.max_abs_value)) + hparams.min_level_db)
+    else:
+        return ((D * -hparams.min_level_db / hparams.max_abs_value) + hparams.min_level_db)
+
+def _db_to_amp(x):
+    return np.power(10.0, (x) * 0.05)
+
+def _mel_to_linear(mel_spectrogram, hparams):
+    global _inv_mel_basis
+    if _inv_mel_basis is None:
+        _inv_mel_basis = np.linalg.pinv(_build_mel_basis(hparams))
+    return np.maximum(1e-10, np.dot(_inv_mel_basis, mel_spectrogram))
+
+
+def inv_mel_spectrogram(mel_spectrogram, hparams):
+    '''Converts mel spectrogram to waveform using librosa'''
+    if hparams.signal_normalization:
+        D = _denormalize(mel_spectrogram, hparams)
+    else:
+        D = mel_spectrogram
+
+    S = _mel_to_linear(_db_to_amp(D + hparams.ref_level_db), hparams)  # Convert back to linear
+
+    return inv_preemphasis(_griffin_lim(S ** hparams.power, hparams), hparams.preemphasis, hparams.preemphasize)
